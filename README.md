@@ -23,5 +23,5 @@ Requirement:
 
 1) CuraEngine command line executable
 
-![blender](bledner_ss.png)
+![blender](blender_ss.png)
 ![cura](cura_ss.png)
