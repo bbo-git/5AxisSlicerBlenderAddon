@@ -493,7 +493,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
         output_gcode_path = os.path.join(os.path.dirname(stl_path), scene.selected_mesh.name + ".gcode")
 
         # Load the profile JSON
-        profile_json = "/Users/jairo/Documents/4_5th_axis/Addon/creality_ender3.def.json"
+        profile_json = "/Users/jairo/Documents/4_5th_axis/Addon/fdmprinter.def.json"
 
         # Generate G-code for the main model
         selected_mesh_location = scene.selected_mesh.location
@@ -636,7 +636,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             print(f"Error updating JSON file: {e}")
 
     
-    def slice_with_custom_coordinates(self, input_stl, output_gcode, x_offset, y_offset, z_offset, profile_json):
+    def slice_with_custom_coordinates(self, input_stl, output_gcode, x_offset, y_offset, z_offset, profile_json, layer_height=0.15, infill=15):
         """
         Slice the STL file and generate G-code using CuraEngine.
         """
@@ -657,8 +657,18 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             "slice",
             "-p",
             "-s", 'start_gcode=""',   # This line disables start g-code
-            "-s", 'end_gcode="M2"',
+            "-s", 'end_gcode=""',
             "-s", "roofing_layer_count=3",
+            "-s", "print_speed=40",
+            "-s", "first_layer_print_speed=15",
+            "-s", "travel_print_speed=60",
+            "-s", 'adhesion_type=none',
+            "-s", "brim_width=0",
+            "-s", "first_layer_height=0.15",
+            "-s", f"layer_height={layer_height}",
+            "-s", f"infill_density={infill}",
+            "-s", f"infill_sparse_density={infill}",
+            "-s", 'infill_pattern=triangles',
             "-j", profile_json,
             "-l", input_stl,
             "-o", temp_path
@@ -903,14 +913,6 @@ class VIEW3D_PT_5AxisPrinterSetup(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
         
-        layout.label(text="C-Axis Settings")
-        layout.prop(scene, "c_axis_name", text="C Axis Name")
-        
-        layout.label(text="Set Build Plate Dimensions:")
-        
-        layout.prop(scene, "x_width")  # Set the X Width of the build plate
-        layout.prop(scene, "y_depth")  # Set the Y Depth of the build plate
-        
         # Add the distance parameter as an input field
         layout.label(text="Set the Distance to Build Plate (A-axis):")
         layout.prop(scene, "build_plate_distance", text="Distance")
@@ -936,7 +938,7 @@ class VIEW3D_PT_5AxisPrinterSetup(bpy.types.Panel):
         # Section: Calculate Theta
         layout.separator()
         layout.label(text="Calculate Theta")
-        layout.operator("slicingcube.calculate_theta", text="Calculate Theta", icon="DRIVER_ROTATIONAL_DIFFERENCE")
+        layout.operator("slicingcube.calculate_theta", text="Calculate Rotations", icon="DRIVER_ROTATIONAL_DIFFERENCE")
 
         # Section: Sliced Pieces
         layout.separator()
