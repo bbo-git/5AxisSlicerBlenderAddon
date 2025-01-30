@@ -272,7 +272,7 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
         # Ensure Eta is between -90 and 0 degrees
         if eta < math.radians(-90) or (eta > math.radians(0) and eta < math.radians(270)):
             print("Fixing positive eta...")
-            theta = self.normalize_angle(theta + math.radians(180))  # Flip theta
+            theta = self.normalize_angle(theta - math.radians(180))  # Flip theta
 
             # Reapply rotation
             rotation = self.rotation_matrix(math.radians(180), (0, 0, 1))
@@ -669,6 +669,11 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             "-s", f"infill_density={infill}",
             "-s", f"infill_sparse_density={infill}",
             "-s", 'infill_pattern=triangles',
+            "-s", 'min_wall_line_width=0.3',
+            "-s", "support_z_seam_away_from_model=True",
+            "-s", "top_thickness=0.6",
+            "-s", "bottom_thickness=0.6",
+            "-s", "support_z_seam_min_distance=0",
             "-j", profile_json,
             "-l", input_stl,
             "-o", temp_path
@@ -690,7 +695,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             return None
 
         # Remove the first few lines of the G-code (if needed)
-        self.clean_gcode(temp_path, output_gcode, z_offset=z_offset, extruder_to_c=True, lines_to_remove=15, lines_to_remove_end=0)
+        self.clean_gcode(temp_path, output_gcode, z_offset=z_offset, extruder_to_c=True, lines_to_remove=19, lines_to_remove_end=6)
         
         return output_gcode
     
