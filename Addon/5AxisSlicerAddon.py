@@ -184,17 +184,24 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
     bl_idname = "slicingcube.calculate_theta"
     bl_label = "Slice Cone"
     
-    def set_origin_to_cursor(self, obj):
+    def set_origin_to_a_axis(self, obj):
         # Ensure the object is selected and active
         bpy.context.view_layer.objects.active = obj
         obj.select_set(True)
+        
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+        
+        # Update cursor location directly
+        bpy.context.scene.cursor.location = (0, 0, bpy.context.scene.build_plate_distance)
         
         # Set the object’s origin to the 3D cursor
         bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
         
         # Update and report success
         bpy.context.view_layer.update()
-        self.report({'INFO'}, f"Origin of {obj.name} set to 3D cursor.")
+        
+        self.report({'INFO'}, f"Origin of {obj.name} set to A xis")
+        
         return {'FINISHED'}
            
     def apply_rotations(self, obj, theta, eta):
@@ -210,6 +217,7 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
         rotation = self.rotation_matrix(eta, axis)
         obj.matrix_world = rotation @ obj.matrix_world
         
+        self.report({'INFO'}, f"{obj.name}rotations applied")
         
     def invert_rotations(self, obj, theta, eta):
         """
@@ -222,6 +230,8 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
         axis = (0, 0, 1)  # Z-axis
         rotation = self.rotation_matrix(-theta, axis)
         obj.matrix_world = rotation @ obj.matrix_world
+        
+        self.report({'INFO'}, f"{obj.name}rotations inverted")
     
     def normalize_angle(self, angle):
         return (angle + math.pi) % (2 * math.pi) - math.pi
@@ -229,7 +239,7 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
     def calculate_rotations(self, slicing_cube):
         """
         Calculate theta (rotation around Z-axis) and eta (rotation around X-axis)
-        based on the bottom face normal of the slicing cube.
+        based on the bottom face normal of the slicing cube **without modifying it**.
         """
         # Ensure the bottom face exists
         if len(slicing_cube.data.polygons) < 5:
@@ -239,81 +249,78 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
         bottom_face = slicing_cube.data.polygons[4]  # Assuming the bottom face is the 4th one
         local_normal = bottom_face.normal  # Normal in local space
 
-        # Transform normal to world space
+        # Transform normal to world space (copy, don't modify the object)
         normal_in_world_space = slicing_cube.matrix_world.to_3x3() @ local_normal
+        normal_in_world_space = normal_in_world_space.normalized()  # Ensure it's normalized
         print(f"Local Normal: {local_normal}, World Normal: {normal_in_world_space}")
 
         # Compute Theta (Rotation around Z)
-        normal_xy = mathutils.Vector((normal_in_world_space.x, normal_in_world_space.y))
-        normal_xy.normalize()
-        theta = atan2(normal_xy.y, normal_xy.x) + math.radians(90)
+        normal_xy = mathutils.Vector((normal_in_world_space.x, normal_in_world_space.y)).normalized()
+        theta = math.atan2(normal_xy.y, normal_xy.x) + math.radians(90)
         theta = -self.normalize_angle(theta)
         print(f"Theta (Z-axis rotation): {math.degrees(theta)} degrees")
 
-        # Apply theta rotation and recalculate normal
-        rotation = self.rotation_matrix(theta, (0, 0, 1))  # Rotate around Z-axis
-        slicing_cube.matrix_world = rotation @ slicing_cube.matrix_world
-
-        # Recalculate bottom face normal
-        bottom_face = slicing_cube.data.polygons[4]
-        rotated_normal = slicing_cube.matrix_world.to_3x3() @ bottom_face.normal
+        # Apply theta rotation **to a copy of the normal vector**
+        rotation_matrix_theta = self.rotation_matrix(theta, (0, 0, 1))
+        rotated_normal = rotation_matrix_theta @ normal_in_world_space  # Rotate the normal only
         print(f"Rotated Normal (after theta): {rotated_normal}")
 
         # Compute Eta (Rotation around X)
-        normal_yz = mathutils.Vector((rotated_normal.y, rotated_normal.z))
+        normal_yz = mathutils.Vector((rotated_normal.y, rotated_normal.z)).normalized()
+        
         if normal_yz.length == 0:
             print("Warning: Normal is parallel to X-axis. Cannot calculate eta.")
             return None
 
-        normal_yz.normalize()
-        eta = atan2(normal_yz.x, normal_yz.y) + math.radians(-180)
+        eta = math.atan2(normal_yz.x, normal_yz.y) + math.radians(-180)
         eta = self.normalize_angle(eta)
 
         # Ensure Eta is between -90 and 0 degrees
-        if eta < math.radians(-90) or (eta > math.radians(0) and eta < math.radians(270)):
+        if eta < math.radians(-90) or (eta > math.radians(45) and eta < math.radians(270)):
             print("Fixing positive eta...")
             theta = self.normalize_angle(theta - math.radians(180))  # Flip theta
 
-            # Reapply rotation
-            rotation = self.rotation_matrix(math.radians(180), (0, 0, 1))
-            slicing_cube.matrix_world = rotation @ slicing_cube.matrix_world
+            # Apply 180-degree rotation around Z to normal (not the object)
+            rotation_matrix_theta = self.rotation_matrix(math.radians(180), (0, 0, 1))
+            rotated_normal = rotation_matrix_theta @ rotated_normal  # Rotate the copied normal
 
             # Recalculate eta
-            bottom_face = slicing_cube.data.polygons[4]
-            rotated_normal = slicing_cube.matrix_world.to_3x3() @ bottom_face.normal
-            normal_yz = mathutils.Vector((rotated_normal.y, rotated_normal.z))
-            
+            normal_yz = mathutils.Vector((rotated_normal.y, rotated_normal.z)).normalized()
+
             if normal_yz.length == 0:
                 self.report({'ERROR'}, "Normal is parallel to X-axis after theta fix.")
                 return None
 
-            normal_yz.normalize()
-            eta = atan2(normal_yz.x, normal_yz.y) + math.radians(-180)
+            eta = math.atan2(normal_yz.x, normal_yz.y) + math.radians(-180)
             eta = self.normalize_angle(eta)
 
-        # Apply the final eta rotation
-        rotation = self.rotation_matrix(eta, (1, 0, 0))  # Rotate around X-axis
-        slicing_cube.matrix_world = rotation @ slicing_cube.matrix_world
+        # Apply final eta rotation **to normal vector only**
+        rotation_matrix_eta = self.rotation_matrix(eta, (1, 0, 0))
+        rotated_normal = rotation_matrix_eta @ rotated_normal  # Apply X-axis rotation
 
         # Final check on eta validity
-        if math.radians(-90) <= eta <= math.radians(0):
+        if math.radians(-90) <= eta <= math.radians(45):
+            self.report({'INFO'}, f"{slicing_cube.name} rotations calulated")
             return theta, eta
         else:
             self.report({'ERROR'}, "A suitable rotation could not be found.")
-            return 0, 0
-            
+            return 0, 0     
     
     def apply_boolean_intersect(self, original_mesh, slicing_cube):
         """
         Apply the Boolean Intersect operation on the given mesh using the slicing cube.
         Also applies the transformations (theta and eta) to the resulting sliced-off piece.
         """
+        bpy.ops.object.select_all(action='DESELECT')
+        original_mesh.select_set(True)
         bpy.context.view_layer.objects.active = original_mesh
         bool_intersect = original_mesh.modifiers.new(name="Intersect", type='BOOLEAN')
         bool_intersect.operation = 'INTERSECT'
         bool_intersect.object = slicing_cube
         bpy.context.view_layer.objects.active = original_mesh
         bpy.ops.object.modifier_apply(modifier=bool_intersect.name)
+        
+        self.report({'INFO'}, f"Boolean performed between {original_mesh} and {slicing_cube}")
 
         return None
 
@@ -353,28 +360,54 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
         
         return rotation
     
-    def set_origin_to_bbox(self, obj):
+    def get_bbox_center(self, obj):
+        if not obj:
+            return None
+
+        # Ensure Blender updates the object's data
+        bpy.context.view_layer.update()
+
+        # Convert bounding box (local space) to world space
+        bbox_corners = [obj.matrix_world @ mathutils.Vector(corner) for corner in obj.bound_box]
+
+        # Compute the center as a Blender Vector
+        bbox_center = sum(bbox_corners, mathutils.Vector()) / 8  # Average of 8 points
+
+        return bbox_center
+    
+    def get_set_bbox_center(self, obj):
         bbox_corners = obj.bound_box
-        bbox_center = [(sum(coord[i] for coord in bbox_corners) / 8) for i in range(3)]
         
+        bbox_center = self.get_bbox_center(obj)
+        
+        bpy.context.scene.cursor.location = (bbox_center[0], bbox_center[1], bbox_center[2])
+        self.report({'INFO'}, f"in order to set the bbox the cursos was moved to ({bbox_center[0]},{bbox_center[1]},{bbox_center[2]})")
+        
+        bpy.ops.object.select_all(action='DESELECT')
+        obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
         
         # Set the origin to the bounding box center
-        bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+        bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
         z_coords = [obj.matrix_world @ v.co for v in obj.data.vertices]
         global_z_coords = [v.z for v in z_coords]
     
         # Find the minimum Z value in global coordinates
         min_z = min(global_z_coords)
     
-
-        return obj.location.x, obj.location.y, min_z
+        bpy.context.scene.cursor.location = (0, 0, bpy.context.scene.build_plate_distance)
+       
+        self.report({'INFO'}, f"{obj.name} set bbox to center")
+        
+        return bbox_center[0], bbox_center[1], min_z
         
     def execute(self, context):
         scene = context.scene
         slicing_cubes = [bpy.data.objects[item.name] for item in scene.slicing_cubes_collection]
+        
         selected_mesh = context.active_object
         selected_mesh.rotation_mode = 'YZX'
+        self.set_origin_to_a_axis(selected_mesh)
         
         if not selected_mesh or selected_mesh.type != 'MESH':
             self.report({'ERROR'}, "Please select a valid mesh object!")
@@ -383,7 +416,7 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
         scene.selected_mesh = selected_mesh
 
         # Update cursor location directly
-        bpy.context.scene.cursor.location = (0, 0, scene.build_plate_distance)
+#        bpy.context.scene.cursor.location = (0, 0, scene.build_plate_distance)
 
         if not selected_mesh or selected_mesh.type != 'MESH':
             self.report({'ERROR'}, "Please select a mesh object to slice!")
@@ -402,13 +435,15 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
         for slicing_cube in slicing_cubes:
             # Set the origin of the slicing cube to the 3D cursor
             
+            mesh_copy = selected_mesh.copy()
+            mesh_copy.data = selected_mesh.data.copy()
+            scene.collection.objects.link(mesh_copy)
+            
+            self.report({'INFO'}, f"made copy: {mesh_copy.name}")
+            
             slicing_cube.rotation_mode = 'YZX'
-            self.set_origin_to_cursor(slicing_cube)
-            
-            bpy.context.view_layer.objects.active = slicing_cube
-            bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
-            
-            
+            self.set_origin_to_a_axis(slicing_cube)
+         
             # Apply rotations based on theta and eta
             rotations = self.calculate_rotations(slicing_cube)
             if rotations is None:
@@ -416,19 +451,22 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
 
             theta, eta = rotations
             
-            mesh_copy = selected_mesh.copy()
-            mesh_copy.data = selected_mesh.data.copy()
-            scene.collection.objects.link(mesh_copy)
             
-            self.apply_rotations(selected_mesh, theta, eta)
-            self.apply_rotations(mesh_copy, theta, eta)
-
+            
+            self.set_origin_to_a_axis(mesh_copy)
+            mesh_copy.rotation_mode = 'YZX'
+            
+            
             # Apply Boolean Intersect operation and apply transformations to the sliced-off piece
             self.apply_boolean_intersect(mesh_copy, slicing_cube)
             
-            #apply rotations to sliced off part
-            x, y, min_z = self.set_origin_to_bbox(mesh_copy)
+            self.apply_rotations(mesh_copy, theta, eta)
+
             
+            #apply rotations to sliced off part
+            mesh_copy.location = (0,0,bpy.context.scene.build_plate_distance)
+            x, y, min_z = self.get_set_bbox_center(mesh_copy)
+        
             # Now, create a new sliced piece and assign the relevant information
             piece = scene.sliced_pieces_collection.add()
             piece.name = f"Sliced Piece {len(scene.sliced_pieces_collection)}"
@@ -455,16 +493,13 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
             # Apply Boolean Difference operation to the original mesh
             self.apply_boolean_difference(selected_mesh, slicing_cube)
 
-            # Invert the rotations on the selected mesh to restore its original orientation
-            self.invert_rotations(selected_mesh, theta, eta)
-            
             # Clear any transformations for the intersected mesh
             bpy.context.view_layer.objects.active = selected_mesh
 
         # Cleanup by removing the duplicated original mesh
         
         #bounding box origin for selected mesh
-        self.set_origin_to_bbox(selected_mesh)
+        self.get_set_bbox_center(selected_mesh)
         
         self.report({'INFO'}, "Slicing completed successfully.")
         return {'FINISHED'}
@@ -479,6 +514,48 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
     bl_label = "Generate G-code"
     bl_description = "Generate G-code for the sliced model"
     bl_options = {'REGISTER', 'UNDO'}
+
+    def get_bbox_center(self, obj):
+        if not obj:
+            return None
+
+        # Ensure Blender updates the object's data
+        bpy.context.view_layer.update()
+
+        # Convert bounding box (local space) to world space
+        bbox_corners = [obj.matrix_world @ mathutils.Vector(corner) for corner in obj.bound_box]
+
+        # Compute the center as a Blender Vector
+        bbox_center = sum(bbox_corners, mathutils.Vector()) / 8  # Average of 8 points
+
+        return bbox_center
+    
+    def get_set_bbox_center(self, obj):
+        bbox_corners = obj.bound_box
+        
+        bbox_center = self.get_bbox_center(obj)
+        
+        bpy.context.scene.cursor.location = (bbox_center[0], bbox_center[1], bbox_center[2])
+        self.report({'INFO'}, f"in order to set the bbox the cursos was moved to ({bbox_center[0]},{bbox_center[1]},{bbox_center[2]})")
+        
+        bpy.ops.object.select_all(action='DESELECT')
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        
+        # Set the origin to the bounding box center
+        bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+        z_coords = [obj.matrix_world @ v.co for v in obj.data.vertices]
+        global_z_coords = [v.z for v in z_coords]
+    
+        # Find the minimum Z value in global coordinates
+        min_z = min(global_z_coords)
+    
+        bpy.context.scene.cursor.location = (0, 0, bpy.context.scene.build_plate_distance)
+       
+        self.report({'INFO'}, f"{obj.name} set bbox to center")
+        
+        return bbox_center[0], bbox_center[1], min_z
+        
 
     def execute(self, context):
         scene = context.scene
@@ -496,6 +573,8 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
         profile_json = "/Users/jairo/Documents/4_5th_axis/Addon/fdmprinter.def.json"
 
         # Generate G-code for the main model
+        self.get_set_bbox_center(scene.selected_mesh)
+        
         selected_mesh_location = scene.selected_mesh.location
         print(f"Selected mesh location: {selected_mesh_location}")
 
@@ -516,10 +595,12 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
         for sliced_piece_item in scene.sliced_pieces_collection:
             # Retrieve the Blender object associated with this slicing piece
             sliced_piece = sliced_piece_item.geometry_object
+            
             if not sliced_piece:
                 self.report({'WARNING'}, f"Could not find sliced piece object: {sliced_piece_item.name}")
                 continue
 
+            x, y, z = self.get_set_bbox_center(sliced_piece)
             # Export the sliced piece as an STL file
             stl_path_piece = self.export_stl(sliced_piece)
             if not stl_path_piece:
@@ -537,9 +618,9 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             piece_gcode_path = self.slice_with_custom_coordinates(
                 stl_path_piece,
                 output_gcode_piece,
-                sliced_piece_location.x,
-                sliced_piece_location.y,
-                sliced_piece_location.z, 
+                x,
+                y,
+                z, 
                 profile_json
             )
             
@@ -549,7 +630,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
 
             # Insert the safe turning position and rotation commands
             inital_comment = f"; THIS IS START OF {piece_gcode_path}\n"
-            safe_position_command = "G1 F400 X0 Y0 Z150\n"
+            safe_position_command = "G1 F400 X0 Y0 Z140\n"
             rotation_command = f"G1 F400 A{sliced_piece_item.theta} B{sliced_piece_item.eta}\n"
             gcode_lines.insert(0, inital_comment)
             gcode_lines.insert(1, safe_position_command)
