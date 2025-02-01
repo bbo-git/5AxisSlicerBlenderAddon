@@ -397,7 +397,7 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
     
         bpy.context.scene.cursor.location = (0, 0, bpy.context.scene.build_plate_distance)
        
-        self.report({'INFO'}, f"{obj.name} set bbox to center")
+        self.report({'INFO'}, f"{obj.name} set bbox to center returning {bbox_center[0]}, {bbox_center[1]}, {min_z}")
         
         return bbox_center[0], bbox_center[1], min_z
         
@@ -506,7 +506,7 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
     
 
 ###_______________________________________________________________
-### GENERATE GCODE
+### GENERATE A
 ###________________________________________________________________
 
 class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
@@ -601,6 +601,11 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
                 continue
 
             x, y, z = self.get_set_bbox_center(sliced_piece)
+            
+            #IMportant! ensures, no geometry is in teh -z region
+            if sliced_piece_item.z_offset < 0:
+                sliced_piece.location.z += -z
+                
             # Export the sliced piece as an STL file
             stl_path_piece = self.export_stl(sliced_piece)
             if not stl_path_piece:
@@ -620,10 +625,10 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
                 output_gcode_piece,
                 x,
                 y,
-                z, 
+                sliced_piece_item.z_offset, 
                 profile_json
             )
-            
+        
             # Append the safe turning position and rotation commands to the G-code file
             with open(piece_gcode_path, 'r') as file:
                 gcode_lines = file.readlines()
@@ -631,7 +636,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             # Insert the safe turning position and rotation commands
             inital_comment = f"; THIS IS START OF {piece_gcode_path}\n"
             safe_position_command = "G1 F400 X0 Y0 Z140\n"
-            rotation_command = f"G1 F400 A{sliced_piece_item.theta} B{sliced_piece_item.eta}\n"
+            rotation_command = f"G1 F400 A{sliced_piece_item.eta} B{sliced_piece_item.theta}\n"
             gcode_lines.insert(0, inital_comment)
             gcode_lines.insert(1, safe_position_command)
             gcode_lines.insert(2, rotation_command)
@@ -731,7 +736,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
         
         temp_path = input_stl + ".gcode"
 
-        self.update_json_file("/Users/jairo/Documents/4_5th_axis/Addon/fdmprinter.def.json", updates)
+        self.update_json_file("/Users/jairo/Documents/4_5th_axis/Addon/creality_base.def.json", updates)
         
         command = [
             "/Users/jairo/CuraEngine/build/Release/CuraEngine",
@@ -745,8 +750,8 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             "-s", "travel_print_speed=60",
             "-s", 'adhesion_type=none',
             "-s", "brim_width=0",
-            "-s", "first_layer_height=0.15",
-            "-s", f"layer_height={layer_height}",
+            "-s", "layer_height_0=0.2",
+            "-s", "layer_height=0.2",
             "-s", f"infill_density={infill}",
             "-s", f"infill_sparse_density={infill}",
             "-s", 'infill_pattern=triangles',
@@ -823,7 +828,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             line = " ".join(parts) + "\n"  # Rebuild the line
         return line
     
-    def clean_gcode(self, input_gcode, output_gcode, z_offset=0.0, extruder_to_c=True, lines_to_remove=0, lines_to_remove_end=0):
+    def clean_gcode(self, input_gcode, output_gcode, z_offset, extruder_to_c=True, lines_to_remove=0, lines_to_remove_end=0):
         """
         Main function to clean up G-code by applying transformations such as Z-offset, replacing axes, and removing unwanted commands.
         
@@ -853,7 +858,9 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
 
             # Add the modified line to the processed list
             processed_lines.append(line)
-
+        
+        self.report({'INFO'}, f"Adjusted Z-offser by {z_offset}")
+        
         # Step 4: Optionally, remove the first 'lines_to_remove' lines from the processed lines
         if lines_to_remove > 0 and len(processed_lines) > lines_to_remove:
             processed_lines = processed_lines[lines_to_remove:]
