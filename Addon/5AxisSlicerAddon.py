@@ -592,7 +592,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
         self.report({'INFO'}, f"G-code generated for main model: {output_gcode_path}")
 
         # Iterate over sliced pieces and generate G-code for each
-        for sliced_piece_item in scene.sliced_pieces_collection:
+        for sliced_piece_item in list(reversed(scene.sliced_pieces_collection)):
             # Retrieve the Blender object associated with this slicing piece
             sliced_piece = sliced_piece_item.geometry_object
             
