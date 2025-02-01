@@ -31,3 +31,4 @@ Requirements:
 
 ![blender](blender_ss.png)
 ![cura](cura_ss.png)
+![cura](IMG_1329.png)
