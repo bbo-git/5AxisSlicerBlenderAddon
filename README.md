@@ -26,7 +26,7 @@ Requirements:
 
 [![Explanation](explanation_yt.png)](https://www.youtube.com/watch?v=uJB1H7AD7v0)
 
-[![Finished print](short_yt_yt.png)](https://www.youtube.com/watch?v=lAdLOM8ADbw)
+[![Finished print](short_yt.png)](https://www.youtube.com/watch?v=lAdLOM8ADbw)
 
 
 ![blender](blender_ss.png)
