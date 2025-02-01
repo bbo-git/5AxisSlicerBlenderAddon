@@ -19,9 +19,15 @@ Installation:
 2) Go to Blender > Edit > Preferences > install addon from local file > point to addon file
 3) In the viewport the panel "5 - Axis printer" appears 
 
-Requirement:
+Requirements:
 
-1) CuraEngine command line executable
+1) Blender
+2) CuraEngine command line executable
+
+[![Explanation](explanation_yt.png)](https://www.youtube.com/watch?v=uJB1H7AD7v0)
+
+[![Finished print](short_yt_yt.png)](https://www.youtube.com/watch?v=lAdLOM8ADbw)
+
 
 ![blender](blender_ss.png)
 ![cura](cura_ss.png)
