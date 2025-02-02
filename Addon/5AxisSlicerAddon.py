@@ -487,7 +487,7 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
             piece.eta = math.degrees(eta)      # Convert from radians to degrees for eta
 
             # Optionally, set default values for layer_height and infill_density
-            piece.layer_height = 0.2  # Default layer height (modify as needed)
+            piece.layer_height = 0.15 # Default layer height (modify as needed)
             piece.infill_density = 20.0  # Default infill density (modify as needed)
 
             # Apply Boolean Difference operation to the original mesh
@@ -584,7 +584,10 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             selected_mesh_location.x,
             selected_mesh_location.y,
             0,  # Assuming Z-offset is zero for the main model
-            profile_json
+            profile_json,
+            adhesion="brim",
+            speed=40,
+            support_enabled=True
         )
         
         gcode_files = [output_gcode_path]
@@ -626,7 +629,10 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
                 x,
                 y,
                 sliced_piece_item.z_offset, 
-                profile_json
+                profile_json,
+                speed=sliced_piece_item.speed,
+                adhesion="none",
+                support_enabled=False
             )
         
             # Append the safe turning position and rotation commands to the G-code file
@@ -717,49 +723,176 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             with open(file_path, 'w') as file:
                 json.dump(json_data, file, indent=4)
 
-            print(f"Successfully updated {file_path}.")
+            self.report({'INFO'}, f"Successfully updated {file_path}. Updates: {updates}")
         except Exception as e:
             print(f"Error updating JSON file: {e}")
 
     
-    def slice_with_custom_coordinates(self, input_stl, output_gcode, x_offset, y_offset, z_offset, profile_json, layer_height=0.15, infill=15):
+    def slice_with_custom_coordinates(self, input_stl, output_gcode, x_offset, y_offset, z_offset, profile_json, layer_height=0.15, speed=40, infill=15, adhesion="brim", support_enabled=False):
         """
         Slice the STL file and generate G-code using CuraEngine.
         """
         
         # Dictionary of updates you want to make
         updates = {
-            "settings.command_line_settings.children.mesh_position_x.default_value": -(bpy.context.scene.x_width / 2),
-            "settings.command_line_settings.children.mesh_position_y.default_value": -(bpy.context.scene.y_depth / 2),
-            "settings.command_line_settings.children.mesh_position_z.default_value": 0
+            "settings.command_line_settings.children.mesh_position_x.default_value": 0,
+            "settings.command_line_settings.children.mesh_position_y.default_value": 0,
+            "settings.command_line_settings.children.mesh_position_z.default_value": 0,
+            "settings.speed.children.speed_print.children.speed_wall.children.speed_wall_0.default_value": speed * 0.75,
+            "settings.speed.children.speed_print.children.speed_wall.children.speed_wall_x.default_value": speed,
+            "settings.speed.children.speed_print.children.speed_infill.default_value": speed,
+            "settings.platform_adhesion.children.adhesion_type.default_value": adhesion,
+            "settings.resolution.children.layer_height.default_value": layer_height,
+            "settings.support.children.support_enable.default_value": support_enabled
+            
         }
         
         temp_path = input_stl + ".gcode"
 
-        self.update_json_file("/Users/jairo/Documents/4_5th_axis/Addon/creality_base.def.json", updates)
+        self.update_json_file("/Users/jairo/Documents/4_5th_axis/Addon/fdmprinter.def.json", updates)
         
         command = [
             "/Users/jairo/CuraEngine/build/Release/CuraEngine",
             "slice",
             "-p",
-            "-s", 'start_gcode=""',   # This line disables start g-code
-            "-s", 'end_gcode=""',
-            "-s", "roofing_layer_count=3",
-            "-s", "print_speed=40",
-            "-s", "first_layer_print_speed=15",
-            "-s", "travel_print_speed=60",
+            "-s", 'machine_start_gcode=',   # This line disables start g-code
+            "-s", 'machine_end_gcode=M2',
+            "-s", 'roofing_layer_count=3',
             "-s", 'adhesion_type=none',
-            "-s", "brim_width=0",
-            "-s", "layer_height_0=0.2",
-            "-s", "layer_height=0.2",
-            "-s", f"infill_density={infill}",
-            "-s", f"infill_sparse_density={infill}",
-            "-s", 'infill_pattern=triangles',
-            "-s", 'min_wall_line_width=0.3',
-            "-s", "support_z_seam_away_from_model=True",
-            "-s", "top_thickness=0.6",
-            "-s", "bottom_thickness=0.6",
-            "-s", "support_z_seam_min_distance=0",
+            "-s", 'brim_width=0',
+            "-s", 'layer_height_0=0.2',
+            "-s", 'layer_height=0.2',
+#            "-s", f'speed_print={speed}',
+#            "-s", 'speed_travel=60',
+            "-s", 'reset_flow_duration=2.0',
+            "-s", 'machine_extruder_count=1',
+            "-s", 'mesh_rotation_matrix="[[1,0,0],[0,1,0],[0,0,1]]"',
+            "-s", 'machine_center_is_zero=true',
+            "-s", 'mesh_position_x=0',
+            "-s", 'mesh_position_y=0',
+            "-s", 'mesh_position_z=0',
+            "-s", 'center_object=true',
+            "-s", 'material_shrinkage_percentage_xy=0',
+            "-s", 'material_shrinkage_percentage_z=0',
+            "-s", 'infill_mesh=false',
+            "-s", 'cutting_mesh=false',
+            "-s", 'anti_overhang_mesh=false',
+            "-s", 'machine_width=220',
+            "-s", 'machine_depth=220',
+            "-s", 'machine_height=220',
+            "-s", 'machine_heated_bed=true',
+            "-s", 'machine_heated_build_volume=false',
+            "-s", 'material_guid=false',
+            "-s", 'acceleration_enabled=false',
+            "-s", 'jerk_enabled=false',
+            "-s", 'relative_extrusion=false',
+            "-s", 'machine_scale_fan_speed_zero_to_one=1',
+            "-s", 'machine_nozzle_temp_enabled=false',
+            "-s", 'adaptive_layer_height_enabled=false',
+            "-s", 'slicing_tolerance=0.05',
+            "-s", 'support_enable=false',
+            "-s", 'support_mesh=false',
+            "-s", 'remove_empty_first_layers=false',
+            "-s", 'skirt_brim_extruder_nr=1',
+            "-s", 'prime_tower_brim_enable=false',
+            "-s", 'machine_gcode_flavor=Mach3',
+            "-s", 'machine_use_extruder_offset_to_offset_coords=false',
+            "-s", 'ppr_enable=false',
+            "-s", 'retraction_prime_speed=30',
+            "-s", 'machine_firmware_retract=false',
+            "-s", 'machine_name=JAiro',
+            "-s", 'machine_nozzle_offset_x=0',
+            "-s", 'machine_nozzle_offset_y=0',
+            "-s", 'machine_nozzle_offset_z=0',
+            "-s", 'machine_always_write_active_tool=true',
+            "-s", 'machine_max_feedrate_x=7200',
+            "-s", 'machine_max_feedrate_y=7200',
+            "-s", 'machine_max_feedrate_z=7200',
+            "-s", 'machine_max_feedrate_e=7200',
+            "-s", 'machine_max_acceleration_x=500',
+            "-s", 'machine_max_acceleration_y=500',
+            "-s", 'machine_max_acceleration_z=500',
+            "-s", 'machine_max_acceleration_e=500',
+            "-s", 'machine_max_jerk_xy=20',
+            "-s", 'machine_max_jerk_z=20',
+            "-s", 'machine_max_jerk_e=20',
+            "-s", 'machine_minimum_feedrate=0',
+            "-s", 'machine_acceleration=1000',
+            "-s", 'machine_start_gcode_first=""',
+            "-s", 'material_bed_temp_prepend=100',
+            "-s", 'material_print_temperature_layer_0=200',
+            "-s", 'material_bed_temperature_layer_0=60',
+            "-s", 'cool_min_layer_time=10',
+            "-s", 'cool_min_layer_time_fan_speed_max=100',
+            "-s", 'cool_fan_speed_0=100',
+            "-s", 'cool_fan_speed_min=0',
+            "-s", 'cool_fan_speed_max=0',
+            "-s", 'cool_min_speed=10',
+            "-s", 'cool_fan_full_layer=2',
+            "-s", 'cool_fan_enabled=true',
+            "-s", 'retraction_enable=true',
+            "-s", 'retraction_amount=5',
+            "-s", 'retraction_extra_prime_amount=5',
+            "-s", 'retraction_retract_speed=10',
+            "-s", 'retraction_hop=true',
+            "-s", 'retraction_min_travel=3',
+            "-s", 'retraction_extrusion_window=4.5',
+            "-s", 'retraction_count_max=999999999',
+            "-s", 'retraction_hop_after_extruder_switch=true',
+            "-s", 'switch_extruder_extra_prime_amount=0',
+            "-s", 'switch_extruder_retraction_amount=0',
+            "-s", 'switch_extruder_retraction_speed=25',
+            "-s", 'switch_extruder_prime_speed=50',
+            "-s", 'retraction_hop_after_extruder_switch_height=0',
+            "-s", 'wipe_retraction_enable=false',
+            "-s", 'wipe_retraction_amount=5',
+            "-s", 'wipe_retraction_retract_speed=10',
+            "-s", 'wipe_retraction_prime_speed=10',
+            "-s", 'wipe_retraction_extra_prime_amount=5',
+            "-s", 'wipe_pause=0',
+            "-s", 'wipe_hop_enable=false',
+            "-s", 'wipe_hop_amount=0',
+            "-s", 'wipe_hop_speed=0',
+            "-s", 'wipe_brush_pos_x=0',
+            "-s", 'wipe_brush_pos_y=0',
+            "-s", 'wipe_brush_pos_z=0',
+            "-s", 'wipe_repeat_count=0',
+            "-s", 'wipe_move_distance=0',
+            "-s", 'max_extrusion_before_wipe=10',
+            "-s", 'clean_between_layers=false',
+            "-s", 'material_bed_temp_wait=40',
+            "-s", 'material_print_temp_prepend=200',
+            "-s", 'material_print_temp_wait=200',
+            "-s", 'machine_extruders_share_nozzle=false',
+            "-s", 'support_infill_extruder_nr=0',
+            "-s", 'support_infill_angles="[]"',
+            "-s", 'support_extruder_nr_layer_0=0',
+            "-s", 'support_roof_extruder_nr=0',
+            "-s", 'support_roof_angles="[]"',
+            "-s", 'support_roof_pattern=lines',
+            "-s", 'support_bottom_extruder_nr=0',
+            "-s", 'support_bottom_pattern=lines',
+            "-s", 'support_bottom_angles="[]"',
+            "-s", 'layer_start_x=0',
+            "-s", 'layer_start_y=0',
+            "-s", 'layer_start_z=0',
+            "-s", 'prime_blob_enable=false',
+            "-s", 'print_sequence=all_at_once',
+            "-s", 'raft_surface_extruder_nr=0',
+            "-s", 'magic_spiralize=false',
+            "-s", 'extruder_nr=0',
+            "-s", 'material_diameter=1.75',
+            "-s", 'machine_extruder_cooling_fan_number=0',
+            "-s", 'machine_extruder_prestart_code=',
+            "-s", 'machine_extruder_start_code=',
+            "-s", 'machine_extruder_end_code=',
+            "-s", 'machine_extruder_start_code_duration=0',
+            "-s", 'machine_extruder_change_duration=0',
+            "-s", 'machine_extruder_start_pos_x=0',
+            "-s", 'machine_extruder_start_pos_y=0',
+            "-s", 'machine_extruder_start_pos_z=0',
+            "-s", 'reset_flow_duration=0',
+            "-s", 'support_z_seam_away_from_model=true',
             "-j", profile_json,
             "-l", input_stl,
             "-o", temp_path
@@ -816,10 +949,10 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
         """
         Replace the A-axis with C-axis in the G-code line.
         """
-        if "A" in line:  # Check for "A" in the line (without worrying about spaces)
+        if "E" in line:  # Check for "A" in the line (without worrying about spaces)
             parts = line.split()
             for i, part in enumerate(parts):
-                if part.startswith("A"):  # Check for "A" at the start of the part
+                if part.startswith("E"):  # Check for "A" at the start of the part
                     try:
                         a_value = float(part[1:])  # Extract the numeric value after "A"
                         parts[i] = f"C{a_value:.3f}"  # Replace "A" with "C"
@@ -900,7 +1033,14 @@ class SlicedPieceItem(bpy.types.PropertyGroup):
         min=0.05,  # Minimum layer height (example limit)
         max=1.0    # Maximum layer height (example limit)
     )
-    infill: bpy.props.FloatProperty(
+    speed: bpy.props.FloatProperty(
+        name="Speed",
+        description="Print speed",
+        default=60,  # Default value in mm
+        min=0,  # Minimum layer height (example limit)
+        max=1100    # Maximum layer height (example limit)
+    )
+    infill_density: bpy.props.FloatProperty(
         name="Infill Percentage",
         description="Infill density as a percentage",
         default=20.0,  # Default value
@@ -1030,7 +1170,7 @@ class VIEW3D_PT_5AxisPrinterSetup(bpy.types.Panel):
 
         # Section: Calculate Theta
         layout.separator()
-        layout.label(text="Calculate Theta")
+        layout.label(text="Calculate Rotations")
         layout.operator("slicingcube.calculate_theta", text="Calculate Rotations", icon="DRIVER_ROTATIONAL_DIFFERENCE")
 
         # Section: Sliced Pieces
@@ -1056,6 +1196,7 @@ class VIEW3D_PT_5AxisPrinterSetup(bpy.types.Panel):
                 # Display properties of the selected sliced piece
             layout.prop(piece, "geometry_object", text="Geometry Object")
             layout.prop(piece, "layer_height")
+            layout.prop(piece, "speed")
             layout.prop(piece, "infill_density")
             layout.prop(piece, "theta")
             layout.prop(piece, "eta")
@@ -1066,6 +1207,7 @@ class VIEW3D_PT_5AxisPrinterSetup(bpy.types.Panel):
         # Section: Generate G-code
         layout.separator()
         layout.label(text="Generate G-code")
+#        layout.prop(
         layout.operator("slicingcube.generate_gcode", text="Generate G-code", icon="FILE_SCRIPT")
         
         # Reset Button
