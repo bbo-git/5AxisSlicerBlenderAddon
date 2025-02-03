@@ -630,6 +630,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
                 y,
                 sliced_piece_item.z_offset, 
                 profile_json,
+                layer_height = sliced_piece_item.layer_height,
                 speed=sliced_piece_item.speed,
                 adhesion="none",
                 support_enabled=False
@@ -728,7 +729,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             print(f"Error updating JSON file: {e}")
 
     
-    def slice_with_custom_coordinates(self, input_stl, output_gcode, x_offset, y_offset, z_offset, profile_json, layer_height=0.15, speed=40, infill=15, adhesion="brim", support_enabled=False):
+    def slice_with_custom_coordinates(self, input_stl, output_gcode, x_offset, y_offset, z_offset, profile_json, layer_height=0.225, speed=40, infill=15, adhesion="brim", support_enabled=False):
         """
         Slice the STL file and generate G-code using CuraEngine.
         """
@@ -760,8 +761,8 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             "-s", 'roofing_layer_count=3',
             "-s", 'adhesion_type=none',
             "-s", 'brim_width=0',
-            "-s", 'layer_height_0=0.2',
-            "-s", 'layer_height=0.2',
+#            "-s", 'layer_height_0=0.2',
+#            "-s", 'layer_height=0.2',
 #            "-s", f'speed_print={speed}',
 #            "-s", 'speed_travel=60',
             "-s", 'reset_flow_duration=2.0',
