@@ -42,8 +42,7 @@ bl_info = {
 class SlicingCubeItem(bpy.types.PropertyGroup):
     """Holds a reference to one slicing cube object by name"""
     name: bpy.props.StringProperty(default="SlicingCube")
-    isProcessed: bpy.props.BoolProperty(default=False, description="Has this slicing cube been processed?")
-    
+
 # -------------------------------------------------------------------
 # (3) UIList for Slicing Cubes
 # -------------------------------------------------------------------
@@ -434,12 +433,7 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
         # Duplicate the selected mesh for the operation
         
         for slicing_cube in slicing_cubes:
-            cube_data = next((item for item in scene.slicing_cubes_collection if item.name == slicing_cube.name), None)
             # Set the origin of the slicing cube to the 3D cursor
-            
-            if cube_data and cube_data.isProcessed:
-                self.report({'INFO'}, f"Skipping already processed slicing cube: {slicing_cube.name}")
-                continue  # Skip cubes that are already processed_lines
             
             mesh_copy = selected_mesh.copy()
             mesh_copy.data = selected_mesh.data.copy()
@@ -501,10 +495,6 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
 
             # Clear any transformations for the intersected mesh
             bpy.context.view_layer.objects.active = selected_mesh
-            
-            if cube_data:
-                cube_data.isProcessed = True  # Flag this slicing cube as done
-                self.report({'INFO'}, f"Slicing cube {slicing_cube.name} marked as processed.")
 
         # Cleanup by removing the duplicated original mesh
         
@@ -595,10 +585,9 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             selected_mesh_location.y,
             0,  # Assuming Z-offset is zero for the main model
             profile_json,
-            layer_height = 0.125,
             adhesion="brim",
             speed=40,
-            support_enabled="true"
+            support_enabled=True
         )
         
         gcode_files = [output_gcode_path]
@@ -644,7 +633,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
                 layer_height = sliced_piece_item.layer_height,
                 speed=sliced_piece_item.speed,
                 adhesion="none",
-                support_enabled="false"
+                support_enabled=False
             )
         
             # Append the safe turning position and rotation commands to the G-code file
@@ -750,11 +739,11 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             "settings.command_line_settings.children.mesh_position_x.default_value": 0,
             "settings.command_line_settings.children.mesh_position_y.default_value": 0,
             "settings.command_line_settings.children.mesh_position_z.default_value": 0,
-            "settings.speed.children.speed_print.children.speed_wall.children.speed_wall_0.default_value": f"{str(speed * 0.75)}",
-            "settings.speed.children.speed_print.children.speed_wall.children.speed_wall_x.default_value": f"{str(speed)}",
-            "settings.speed.children.speed_print.children.speed_infill.default_value": f"{str(speed)}",
+            "settings.speed.children.speed_print.children.speed_wall.children.speed_wall_0.default_value": speed * 0.75,
+            "settings.speed.children.speed_print.children.speed_wall.children.speed_wall_x.default_value": speed,
+            "settings.speed.children.speed_print.children.speed_infill.default_value": speed,
             "settings.platform_adhesion.children.adhesion_type.default_value": adhesion,
-            "settings.resolution.children.layer_height.default_value": f"{layer_height:.2f}",
+            "settings.resolution.children.layer_height.default_value": layer_height,
             "settings.support.children.support_enable.default_value": support_enabled
             
         }
@@ -771,7 +760,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             "-s", 'machine_end_gcode=M2',
             "-s", 'roofing_layer_count=3',
             "-s", 'adhesion_type=none',
-#            "-s", 'brim_width=0',
+            "-s", 'brim_width=0',
 #            "-s", 'layer_height_0=0.2',
 #            "-s", 'layer_height=0.2',
 #            "-s", f'speed_print={speed}',
@@ -905,7 +894,6 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             "-s", 'machine_extruder_start_pos_z=0',
             "-s", 'reset_flow_duration=0',
             "-s", 'support_z_seam_away_from_model=true',
-            "-s", 'min_wall_line_width="0.3"',
             "-j", profile_json,
             "-l", input_stl,
             "-o", temp_path
