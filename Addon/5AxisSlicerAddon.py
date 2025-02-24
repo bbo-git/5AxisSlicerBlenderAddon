@@ -654,7 +654,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             # Insert the safe turning position and rotation commands
             inital_comment = f"; THIS IS START OF {piece_gcode_path}\n"
             safe_position_command = "G1 F400 X0 Y0 Z140\n"
-            rotation_command = f"G1 F400 A{sliced_piece_item.eta} {bpy.context.scene.c_axis_name}{sliced_piece_item.theta}\n"
+            rotation_command = f"G1 F400 A{sliced_piece_item.eta} {context.scene.rotary_axis_name}{sliced_piece_item.theta}\n"
             gcode_lines.insert(0, inital_comment)
             gcode_lines.insert(1, safe_position_command)
             gcode_lines.insert(2, rotation_command)
@@ -965,7 +965,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
                 if part.startswith("E"):  # Check for "A" at the start of the part
                     try:
                         a_value = float(part[1:])  # Extract the numeric value after "A"
-                        parts[i] = f"{bpy.types.Scene.c_axis_name}{a_value:.3f}"  # Replace "A" with "C"
+                        parts[i] = f"{bpy.context.scene.c_axis_name}{a_value:.3f}"  # Replace "A" with "C"
                     except ValueError:
                         pass
             line = " ".join(parts) + "\n"  # Rebuild the line
@@ -1156,8 +1156,8 @@ class VIEW3D_PT_5AxisPrinterSetup(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
         
-        layout.prop(scene, "extruder_axis_name", text="extruder axis letter")
-        layout.prop(scene, "c_axis_name", text="second rotary axis")
+        layout.prop(scene, "extruder_axis_name", text="2nd Rot Letter")
+        layout.prop(scene, "c_axis_name", text="Extruder Letter")
         
         # Add the distance parameter as an input field
         layout.label(text="Set the Distance to Build Plate (A-axis):")
@@ -1285,7 +1285,7 @@ def register():
         min=0.1,        # Optional: Add a minimum limit
         max=1000.0      # Optional: Add a maximum limit
     )
-    bpy.types.Scene.c_axis_name = bpy.props.StringProperty(
+    bpy.types.Scene.rotary_axis_name = bpy.props.StringProperty(
         name="B Axis Name",
         description="The name of the axis to replace the extruder (default: C)",
         default="B"
