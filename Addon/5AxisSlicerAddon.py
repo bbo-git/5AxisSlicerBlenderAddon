@@ -595,9 +595,9 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             selected_mesh_location.y,
             0,  # Assuming Z-offset is zero for the main model
             profile_json,
-            layer_height = 0.125,
+            layer_height = 0.2,
             adhesion="brim",
-            speed=40,
+            speed=30,
             support_enabled="true"
         )
         
@@ -654,7 +654,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             # Insert the safe turning position and rotation commands
             inital_comment = f"; THIS IS START OF {piece_gcode_path}\n"
             safe_position_command = "G1 F400 X0 Y0 Z140\n"
-            rotation_command = f"G1 F400 A{sliced_piece_item.eta} B{sliced_piece_item.theta}\n"
+            rotation_command = f"G1 F400 A{sliced_piece_item.eta} {bpy.context.scene.c_axis_name}{sliced_piece_item.theta}\n"
             gcode_lines.insert(0, inital_comment)
             gcode_lines.insert(1, safe_position_command)
             gcode_lines.insert(2, rotation_command)
@@ -750,9 +750,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             "settings.command_line_settings.children.mesh_position_x.default_value": 0,
             "settings.command_line_settings.children.mesh_position_y.default_value": 0,
             "settings.command_line_settings.children.mesh_position_z.default_value": 0,
-            "settings.speed.children.speed_print.children.speed_wall.children.speed_wall_0.default_value": f"{str(speed * 0.75)}",
-            "settings.speed.children.speed_print.children.speed_wall.children.speed_wall_x.default_value": f"{str(speed)}",
-            "settings.speed.children.speed_print.children.speed_infill.default_value": f"{str(speed)}",
+            "settings.speed.children.speed_print.children.default_value": f"{speed:2f}",
             "settings.platform_adhesion.children.adhesion_type.default_value": adhesion,
             "settings.resolution.children.layer_height.default_value": f"{layer_height:.2f}",
             "settings.support.children.support_enable.default_value": support_enabled
@@ -776,7 +774,6 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
 #            "-s", 'layer_height=0.2',
 #            "-s", f'speed_print={speed}',
 #            "-s", 'speed_travel=60',
-            "-s", 'reset_flow_duration=2.0',
             "-s", 'machine_extruder_count=1',
             "-s", 'mesh_rotation_matrix="[[1,0,0],[0,1,0],[0,0,1]]"',
             "-s", 'machine_center_is_zero=true',
@@ -810,17 +807,17 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             "-s", 'machine_gcode_flavor=Mach3',
             "-s", 'machine_use_extruder_offset_to_offset_coords=false',
             "-s", 'ppr_enable=false',
-            "-s", 'retraction_prime_speed=30',
+            "-s", 'retraction_prime_speed=10',
             "-s", 'machine_firmware_retract=false',
             "-s", 'machine_name=JAiro',
             "-s", 'machine_nozzle_offset_x=0',
             "-s", 'machine_nozzle_offset_y=0',
             "-s", 'machine_nozzle_offset_z=0',
             "-s", 'machine_always_write_active_tool=true',
-            "-s", 'machine_max_feedrate_x=7200',
-            "-s", 'machine_max_feedrate_y=7200',
-            "-s", 'machine_max_feedrate_z=7200',
-            "-s", 'machine_max_feedrate_e=7200',
+            "-s", 'machine_max_feedrate_x=3600',
+            "-s", 'machine_max_feedrate_y=3600',
+            "-s", 'machine_max_feedrate_z=3600',
+            "-s", 'machine_max_feedrate_e=3600',
             "-s", 'machine_max_acceleration_x=500',
             "-s", 'machine_max_acceleration_y=500',
             "-s", 'machine_max_acceleration_z=500',
@@ -843,17 +840,17 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             "-s", 'cool_fan_full_layer=2',
             "-s", 'cool_fan_enabled=true',
             "-s", 'retraction_enable=true',
-            "-s", 'retraction_amount=5',
-            "-s", 'retraction_extra_prime_amount=5',
-            "-s", 'retraction_retract_speed=10',
+            "-s", 'retraction_amount=3',
+            "-s", 'retraction_extra_prime_amount=0',
+            "-s", 'retraction_retract_speed=5',
             "-s", 'retraction_hop=true',
             "-s", 'retraction_min_travel=3',
             "-s", 'retraction_extrusion_window=4.5',
-            "-s", 'retraction_count_max=999999999',
+            "-s", 'retraction_count_max=25',
             "-s", 'retraction_hop_after_extruder_switch=true',
             "-s", 'switch_extruder_extra_prime_amount=0',
             "-s", 'switch_extruder_retraction_amount=0',
-            "-s", 'switch_extruder_retraction_speed=25',
+            "-s", 'switch_extruder_retraction_speed=5',
             "-s", 'switch_extruder_prime_speed=50',
             "-s", 'retraction_hop_after_extruder_switch_height=0',
             "-s", 'wipe_retraction_enable=false',
@@ -927,7 +924,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
             return None
 
         # Remove the first few lines of the G-code (if needed)
-        self.clean_gcode(temp_path, output_gcode, z_offset=z_offset, extruder_to_c=True, lines_to_remove=19, lines_to_remove_end=6)
+        self.clean_gcode(temp_path, output_gcode, z_offset=z_offset, extruder_to_c=True, lines_to_remove=22, lines_to_remove_end=6)
         
         return output_gcode
     
@@ -968,7 +965,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
                 if part.startswith("E"):  # Check for "A" at the start of the part
                     try:
                         a_value = float(part[1:])  # Extract the numeric value after "A"
-                        parts[i] = f"C{a_value:.3f}"  # Replace "A" with "C"
+                        parts[i] = f"{bpy.types.Scene.c_axis_name}{a_value:.3f}"  # Replace "A" with "C"
                     except ValueError:
                         pass
             line = " ".join(parts) + "\n"  # Rebuild the line
@@ -1149,7 +1146,7 @@ class SLICINGCUBE_OT_reset_slicing(bpy.types.Operator):
     
 class VIEW3D_PT_5AxisPrinterSetup(bpy.types.Panel):
     """Main panel for 5-Axis Printer, Slicing Cubes, and Slice"""
-    bl_label = "5-Axis Printer (-Z Face)"
+    bl_label = "5-Axis Printer INdexed Slicer"
     bl_idname = "VIEW3D_PT_5axis_3dprinter_bottom_face_down"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -1158,6 +1155,9 @@ class VIEW3D_PT_5AxisPrinterSetup(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
+        
+        layout.prop(scene, "extruder_axis_name", text="extruder axis letter")
+        layout.prop(scene, "c_axis_name", text="second rotary axis")
         
         # Add the distance parameter as an input field
         layout.label(text="Set the Distance to Build Plate (A-axis):")
@@ -1286,10 +1286,16 @@ def register():
         max=1000.0      # Optional: Add a maximum limit
     )
     bpy.types.Scene.c_axis_name = bpy.props.StringProperty(
-        name="C Axis Name",
+        name="B Axis Name",
         description="The name of the axis to replace the extruder (default: C)",
-        default="C"
+        default="B"
     )
+    bpy.types.Scene.extruder_axis_name = bpy.props.StringProperty(
+        name="Extruder Axis Name",
+        description="The name of the axis to replace the extruder (default: C)",
+        default="E"
+    )
+    
     
 def unregister():
     # Unregister collection properties
@@ -1304,6 +1310,7 @@ def unregister():
     del bpy.types.Scene.x_width
     del bpy.types.Scene.y_depth
     del bpy.types.Scene.c_axis_name
+    del bpy.types.Scene.extruder_axis_name
 
     # Unregister classes
     for cls in reversed(classes):
