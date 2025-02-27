@@ -599,7 +599,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
         output_gcode_path = os.path.join(os.path.dirname(stl_path), scene.selected_mesh.name + ".gcode")
 
         # Load the profile JSON
-        profile_json = "/Users/jairo/Documents/4_5th_axis/Addon/fdmprinter.def.json"
+        profile_json = bpy.context.scene.fdmprinter_json_path
 
         # Generate G-code for the main model
         self.get_set_bbox_center(scene.selected_mesh)
@@ -717,8 +717,8 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
         filename = obj.name + ".stl"
 
         # Define the export path
-        blend_directory = os.path.dirname(bpy.data.filepath)
-        stl_export_path = os.path.join(blend_directory, filename)
+        stl_directory = os.path.dirname(bpy.context.scene.output_directory_path)
+        stl_export_path = os.path.join(stl_directory, filename)
 
         # Export the STL file
         bpy.ops.wm.stl_export(filepath=stl_export_path, export_selected_objects=True)
@@ -778,10 +778,10 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
         
         temp_path = input_stl + ".gcode"
 
-        self.update_json_file("/Users/jairo/Documents/4_5th_axis/Addon/fdmprinter.def.json", updates)
+        self.update_json_file(bpy.context.scene.fdmprinter_json_path, updates)
         
         command = [
-            "/Users/jairo/CuraEngine/build/Release/CuraEngine",
+            bpy.context.scene.cura_executable_path,
             "slice",
             "-p",
             "-s", 'machine_start_gcode=',   # This line disables start g-code
@@ -984,7 +984,7 @@ class SLICINGCUBE_OT_generate_gcode(bpy.types.Operator):
                 if part.startswith("E"):  # Check for "A" at the start of the part
                     try:
                         a_value = float(part[1:])  # Extract the numeric value after "A"
-                        parts[i] = f"{bpy.context.scene.c_axis_name}{a_value:.3f}"  # Replace "A" with "C"
+                        parts[i] = f"{bpy.context.scene.extruder_axis_name}{a_value:.3f}"  # Replace "A" with "C"
                     except ValueError:
                         pass
             line = " ".join(parts) + "\n"  # Rebuild the line
@@ -1239,6 +1239,9 @@ class VIEW3D_PT_5AxisPrinterSetup(bpy.types.Panel):
 
         # Section: Generate G-code
         layout.separator()
+        layout.prop(scene, "cura_executable_path")
+        layout.prop(scene, "fdmprinter_json_path")
+        layout.prop(scene, "output_directory_path")
         layout.label(text="Generate G-code")
 #        layout.prop(
         layout.operator("slicingcube.generate_gcode", text="Generate G-code", icon="FILE_SCRIPT")
@@ -1321,6 +1324,25 @@ def register():
         default = True,
         update=lambda self, context: print(f"Updated: {self.favor_negative_a}")
     )
+    bpy.types.Scene.cura_executable_path = bpy.props.StringProperty(
+        name="Cura executable file path",
+        description="Choose a file",
+        default="/Users/jairo/CuraEngine/build/Release/CuraEngine",
+        subtype='FILE_PATH'
+    )
+    bpy.types.Scene.fdmprinter_json_path = bpy.props.StringProperty(
+        name="fdmprinter JSON file path",
+        description="Choose a file",
+        default="/Users/jairo/Documents/4_5th_axis/Addon/fdmprinter.def.json",
+        subtype='FILE_PATH'
+    )
+    bpy.types.Scene.output_directory_path = bpy.props.StringProperty(
+        name="Output directory path",
+        description="Choose a file",
+        default="",
+        subtype='DIR_PATH'
+    )
+
     
 def unregister():
     # Unregister collection properties
