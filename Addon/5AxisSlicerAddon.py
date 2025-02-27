@@ -272,8 +272,13 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
         if normal_yz.length == 0:
             print("Warning: Normal is parallel to X-axis. Cannot calculate eta.")
             return None
-
-        eta = math.atan2(normal_yz.x, normal_yz.y) + math.radians(-180)
+        
+        eta = 0.0
+        if bpy.context.scene.favor_minus_a:
+            eta = math.atan2(normal_yz.x, normal_yz.y) + math.radians(-180)
+        else:
+            eta = math.atan2(normal_yz.x, normal_yz.y)
+            
         eta = self.normalize_angle(eta)
 
         # Ensure Eta is between -90 and 0 degrees
@@ -1156,8 +1161,9 @@ class VIEW3D_PT_5AxisPrinterSetup(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
         
-        layout.prop(scene, "extruder_axis_name", text="2nd Rot Letter")
-        layout.prop(scene, "c_axis_name", text="Extruder Letter")
+        layout.prop(scene, "rotary_axis_name", text="2nd Rot Letter")
+        layout.prop(scene, "extruder_axis_name", text="Extruder Letter")
+        layout.prop(scene, "favor_minus_a")
         
         # Add the distance parameter as an input field
         layout.label(text="Set the Distance to Build Plate (A-axis):")
@@ -1295,7 +1301,11 @@ def register():
         description="The name of the axis to replace the extruder (default: C)",
         default="E"
     )
-    
+    bpy.types.Scene.favor_minus_a = bpy.props.BoolProperty(
+        name="Favor minus A",
+        description="Which way to turn A",
+        default = True
+    )
     
 def unregister():
     # Unregister collection properties
