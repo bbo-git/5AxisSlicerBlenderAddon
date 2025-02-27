@@ -238,6 +238,8 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
         return (angle + math.pi) % (2 * math.pi) - math.pi
        
     def calculate_rotations(self, slicing_cube):
+        
+        print(f"negative: {bpy.context.scene.favor_negative_a}")
         """
         Calculate theta (rotation around Z-axis) and eta (rotation around X-axis)
         based on the bottom face normal of the slicing cube **without modifying it**.
@@ -273,17 +275,30 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
             print("Warning: Normal is parallel to X-axis. Cannot calculate eta.")
             return None
         
-        eta = 0.0
-        if bpy.context.scene.favor_minus_a:
-            eta = math.atan2(normal_yz.x, normal_yz.y) + math.radians(-180)
-        else:
-            eta = math.atan2(normal_yz.x, normal_yz.y)
-            
+        eta = math.atan2(normal_yz.x, normal_yz.y) + math.radians(-180)   
         eta = self.normalize_angle(eta)
 
         # Ensure Eta is between -90 and 0 degrees
-        if eta < math.radians(-90) or (eta > math.radians(45) and eta < math.radians(270)):
+        
+        if bpy.context.scene.favor_negative_a and eta < math.radians(-90) or (eta > math.radians(45) and eta < math.radians(270)):
             print("Fixing positive eta...")
+            theta = self.normalize_angle(theta + math.radians(180))  # Flip theta
+
+            # Apply 180-degree rotation around Z to normal (not the object)
+            rotation_matrix_theta = self.rotation_matrix(math.radians(180), (0, 0, 1))
+            rotated_normal = rotation_matrix_theta @ rotated_normal  # Rotate the copied normal
+
+            # Recalculate eta
+            normal_yz = mathutils.Vector((rotated_normal.y, rotated_normal.z)).normalized()
+
+            if normal_yz.length == 0:
+                self.report({'ERROR'}, "Normal is parallel to X-axis after theta fix.")
+                return None
+
+            eta = math.atan2(normal_yz.x, normal_yz.y) + math.radians(-180)
+            eta = self.normalize_angle(eta)
+        elif not bpy.context.scene.favor_negative_a and eta > math.radians(90) or (eta < math.radians(-45) and eta > math.radians(-270)):
+            print("Fixing negative eta...")
             theta = self.normalize_angle(theta - math.radians(180))  # Flip theta
 
             # Apply 180-degree rotation around Z to normal (not the object)
@@ -299,7 +314,6 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
 
             eta = math.atan2(normal_yz.x, normal_yz.y) + math.radians(-180)
             eta = self.normalize_angle(eta)
-
         # Apply final eta rotation **to normal vector only**
         rotation_matrix_eta = self.rotation_matrix(eta, (1, 0, 0))
         rotated_normal = rotation_matrix_eta @ rotated_normal  # Apply X-axis rotation
@@ -311,7 +325,7 @@ class SLICINGCUBE_OT_slice(bpy.types.Operator):
         else:
             self.report({'ERROR'}, "A suitable rotation could not be found.")
             return 0, 0     
-    
+        
     def apply_boolean_intersect(self, original_mesh, slicing_cube):
         """
         Apply the Boolean Intersect operation on the given mesh using the slicing cube.
@@ -1163,7 +1177,7 @@ class VIEW3D_PT_5AxisPrinterSetup(bpy.types.Panel):
         
         layout.prop(scene, "rotary_axis_name", text="2nd Rot Letter")
         layout.prop(scene, "extruder_axis_name", text="Extruder Letter")
-        layout.prop(scene, "favor_minus_a")
+        layout.prop(scene, "favor_negative_a")
         
         # Add the distance parameter as an input field
         layout.label(text="Set the Distance to Build Plate (A-axis):")
@@ -1301,10 +1315,11 @@ def register():
         description="The name of the axis to replace the extruder (default: C)",
         default="E"
     )
-    bpy.types.Scene.favor_minus_a = bpy.props.BoolProperty(
-        name="Favor minus A",
+    bpy.types.Scene.favor_negative_a = bpy.props.BoolProperty(
+        name="Favor negative A rotations",
         description="Which way to turn A",
-        default = True
+        default = True,
+        update=lambda self, context: print(f"Updated: {self.favor_negative_a}")
     )
     
 def unregister():
@@ -1321,7 +1336,8 @@ def unregister():
     del bpy.types.Scene.y_depth
     del bpy.types.Scene.c_axis_name
     del bpy.types.Scene.extruder_axis_name
-
+    del bpy.types.Scene.favor_negative_a
+    
     # Unregister classes
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
